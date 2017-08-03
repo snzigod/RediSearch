@@ -37,7 +37,10 @@ int AddDocument(RedisSearchCtx *ctx, Document doc, const char **errorString, int
 
   // if we're in replace mode, first we need to try and delete the older version of the document
   if (replace) {
-    DocTable_Delete(&ctx->spec->docs, RedisModule_StringPtrLen(doc.docKey, NULL));
+    if (DocTable_Delete(&ctx->spec->docs, RedisModule_StringPtrLen(doc.docKey, NULL))) {
+      ctx->spec->stats.numDocuments--;
+      GC_OnDelete(ctx->spec->gc);
+    }
   }
 
   doc.docId = DocTable_Put(&ctx->spec->docs, RedisModule_StringPtrLen(doc.docKey, NULL), doc.score,
@@ -462,6 +465,10 @@ int IndexInfoCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
   REPLY_KVNUM(n, "offset_bits_per_record_avg",
               8.0F * (float)sp->stats.offsetVecsSize / (float)sp->stats.offsetVecRecords);
 
+  RedisModule_ReplyWithSimpleString(ctx, "gc_stats");
+  GC_RenderStats(ctx, sp->gc);
+  n += 2;
+
   RedisModule_ReplySetArrayLength(ctx, n);
   return REDISMODULE_OK;
 }
@@ -561,7 +568,9 @@ int DeleteCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
   int rc = DocTable_Delete(&sp->docs, RedisModule_StringPtrLen(argv[2], NULL));
   if (rc == 1) {
     sp->stats.numDocuments--;
+    GC_OnDelete(sp->gc);
   }
+
   return RedisModule_ReplyWithLongLong(ctx, rc);
 }
 
@@ -1203,7 +1212,8 @@ int RediSearch_InitModuleInternal(RedisModuleCtx *ctx, RedisModuleString **argv,
 
   RM_TRY(RedisModule_CreateCommand, ctx, RS_CREATE_CMD, CreateIndexCommand, "write", 1, 1, 1);
 
-  // if (RedisModule_CreateCommand, ctx, RS_OPTIMIZE_CMD, OptimizeIndexCommand, "write", 1, 1, 1) ==
+  // if (RedisModule_CreateCommand, ctx, RS_OPTIMIZE_CMD, OptimizeIndexCommand, "write", 1, 1, 1)
+  // ==
   //     REDISMODULE_ERR)
   //   return REDISMODULE_ERR;
 
