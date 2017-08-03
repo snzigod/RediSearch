@@ -131,6 +131,8 @@ IndexSpec *IndexSpec_Parse(const char *name, const char **argv, int argc, char *
 IndexSpec *IndexSpec_Load(RedisModuleCtx *ctx, const char *name, int openWrite);
 
 int IndexSpec_AddTerm(IndexSpec *sp, const char *term, size_t len);
+
+char *IndexSpec_GetRandomTerm(IndexSpec *sp, size_t sampleSize);
 /*
 * Free an indexSpec. This doesn't free the spec itself as it's not allocated by the parser
 * and should be on the request's stack
